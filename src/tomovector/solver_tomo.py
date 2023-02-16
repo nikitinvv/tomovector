@@ -2,13 +2,14 @@
 
 import cupy as cp
 import numpy as np
-from tomovector.radonusfft import radonusfft
+from tomovector.fourier_rec import FourierRec
+from tomovector.line_rec import LineRec
 import threading
 import concurrent.futures as cf
 from functools import partial
 
 
-class SolverTomo(radonusfft):
+class SolverTomo():
     """Base class for tomography solvers using the USFFT method on GPU.
     This class is a context manager which provides the basic operators required
     to implement a tomography solver. It also manages memory automatically,
@@ -20,87 +21,59 @@ class SolverTomo(radonusfft):
     n, nz : int
         The pixel width and height of the projection.
     pnz : int
-        The number of slice partitions to process together
-        simultaneously.
+        The number of slice partitions to process by a GPU simultaneously.
     ngpus : int
         Number of gpus        
     """
 
-    def __init__(self, theta, p, ntheta, nz, n, pnz, center, ngpus):
+    def __init__(self, theta, p, ntheta, nz, n, pnz, center, method, ngpus):
         """Please see help(SolverTomo) for more info."""
         # create class for the tomo transform associated with first gpu
-        super().__init__(ntheta, pnz, n, center, theta.ctypes.data, ngpus)        
+        if method == 'fourierrec':
+            self.cl_rec = FourierRec(n, ntheta, pnz, theta, center, ngpus)
+        elif method == 'linerec':
+            self.cl_rec = LineRec(n, ntheta, pnz, theta, center, ngpus)
         self.p = cp.array(p)
-        self.nz = nz        
-        
+        self.n = n
+        self.nz = nz
+        self.pnz = pnz
+        self.ntheta = ntheta
+        self.ngpus = ngpus
+
+
     def __enter__(self):
         """Return self at start of a with-block."""
         return self
 
     def __exit__(self, type, value, traceback):
         """Free GPU memory due at interruptions or with-block exit."""
-        self.free()
+        self.cl_rec.free()
 
     def fwd_tomo(self, u, gpu=0):
         """Radon transform (R)"""
-        res = cp.zeros([3, self.ntheta, self.pnz, self.n], dtype='complex64')
-        self.fwd(res[0].data.ptr, u[0].data.ptr, gpu)                
-        self.fwd(res[1].data.ptr, u[1].data.ptr, gpu)                
-        self.fwd(res[2].data.ptr, u[2].data.ptr, gpu)                
-        res = cp.sum(res*self.p,axis=0)        
+        res = cp.zeros([3, self.pnz,  self.ntheta, self.n], dtype='float32')
+        for k in range(3):
+            res[k] = self.cl_rec.fwd(u[k], gpu)
+        res = cp.sum(res*self.p, axis=0)        
         return res
-    
+
     def adj_tomo(self, data, gpu=0):
         """Adjoint Radon transform (R^*)"""
-        res = cp.zeros([3,self.pnz, self.n, self.n], dtype='complex64')
-        self.adj(res[0].data.ptr, (data*self.p[0]).data.ptr, gpu)
-        self.adj(res[1].data.ptr, (data*self.p[1]).data.ptr, gpu)
-        self.adj(res[2].data.ptr, (data*self.p[2]).data.ptr, gpu)
-        return res
-    
-    def line_search(self, minf, gamma, Ru, Rd):
-        """Line search for the step sizes gamma"""
-        while(minf(Ru)-minf(Ru+gamma*Rd) < 0):
-            gamma *= 0.5
-        return gamma   
-    
-    def fwd_tomo_batch(self, u):
-        """Batch of Tomography transform (R)"""
-        res = np.zeros([self.ntheta, self.nz, self.n], dtype='complex64')
-        for k in range(0, self.nz//self.pnz):
-            ids = np.arange(k*self.pnz, (k+1)*self.pnz)
-            # copy data part to gpu
-            u_gpu = cp.array(u[:,ids])
-            # Radon transform
-            res_gpu = self.fwd_tomo(u_gpu,0)
-            # copy result to cpu
-            res[:, ids] = res_gpu.get()
+        data = cp.tile(data,[3,1,1,1])*self.p
+        res = cp.zeros([3, self.pnz, self.n, self.n], dtype='float32')
+        for k in range(3):
+            res[k] = self.cl_rec.adj(data[k], gpu)            
         return res
 
-    def adj_tomo_batch(self, data):
-        """Batch of adjoint Tomography transform (R*)"""
-        res = np.zeros([3,self.nz, self.n, self.n], dtype='complex64')
-        for k in range(0, self.nz//self.pnz):
-            ids = np.arange(k*self.pnz, (k+1)*self.pnz)
-            # copy data part to gpu
-            data_gpu = cp.array(data[:, ids])
-
-            # Adjoint Radon transform
-            res_gpu = self.adj_tomo(data_gpu,0)
-            # copy result to cpu
-            res[:,ids] = res_gpu.get()
-        return res
-
-    # Conjugate gradients tomography (for 1 slice partition)
-    def cg_tomo(self, xi0, u, titer,gpu=0):
+    def cg_tomo(self, xi0, u, titer, gpu, dbg):
         """CG solver for ||Ru-xi0||_2"""
         # minimization functional
         def minf(Ru):
             f = cp.linalg.norm(Ru-xi0)**2
             return f
         for i in range(titer):
-            Ru = self.fwd_tomo(u,gpu)            
-            grad = self.adj_tomo(Ru-xi0,gpu) / \
+            Ru = self.fwd_tomo(u, gpu)
+            grad = self.adj_tomo(Ru-xi0, gpu) / \
                 (self.ntheta * self.n/2)
             if i == 0:
                 d = -grad
@@ -108,18 +81,56 @@ class SolverTomo(radonusfft):
                 d = -grad+cp.linalg.norm(grad)**2 / \
                     (cp.sum(cp.conj(d)*(grad-grad0))+1e-32)*d
             # line search
-            Rd = self.fwd_tomo(d,gpu)
-            gamma = 1#*self.line_search(minf, 8, Ru, Rd)
+            Rd = self.fwd_tomo(d, gpu)
+            gamma = 0.5*self.line_search(minf, 8, Ru, Rd)
             grad0 = grad
             # update step
             u = u + gamma*d
             # check convergence
-            if (1):
+            if dbg:
+                import dxchange
+                dxchange.write_tiff(u[0,261].get(),f'rec/recc{i}',overwrite=True)
                 print("%4d, %.3e, %.7e" %
                       (i, gamma, minf(Ru)))
         return u
-    
-    def cg_tomo_multi_gpu(self,xi0,u,titer,lock,ids):
+
+    def line_search(self, minf, gamma, Ru, Rd):
+        """Line search for the step sizes gamma"""
+        while (minf(Ru)-minf(Ru+gamma*Rd) < 0):
+            gamma *= 0.5
+        return gamma
+
+    # batched versions of operators
+    def fwd_tomo_batch(self, u):
+        """Batch of Tomography transform (R)"""
+        res = np.zeros([self.nz,self.ntheta,self.n], dtype='float32')
+        for k in range(self.nz//self.pnz):
+            ids = np.arange(k*self.pnz, (k+1)*self.pnz)
+            # copy data part to gpu
+            u_gpu = cp.array(u[:,ids])
+            # Radon transform
+            res_gpu = self.fwd_tomo(u_gpu, 0)
+            # copy result to cpu
+            res[ids] = res_gpu.get()
+        return res
+
+    def adj_tomo_batch(self, data):
+        """Batch of adjoint Tomography transform (R*)"""
+        res = np.zeros([3, self.nz, self.n, self.n], dtype='float32')
+        for k in range(self.nz//self.pnz):
+            ids = np.arange(k*self.pnz, (k+1)*self.pnz)
+            # copy data part to gpu
+            data_gpu = cp.array(data[ids])
+
+            # Adjoint Radon transform
+            res_gpu = self.adj_tomo(data_gpu, 0)
+            
+            # copy result to cpu
+            res[:,ids] = res_gpu.get()            
+        return res
+
+    # multi-gpu cg solver by slice partitions
+    def cg_tomo_multi_gpu(self, xi0, u, titer, lock, dbg, ids):
 
         global BUSYGPUS
         lock.acquire()  # will block if lock is already held
@@ -132,31 +143,29 @@ class SolverTomo(radonusfft):
 
         cp.cuda.Device(gpu).use()
         u_gpu = cp.array(u[:,ids])
-        xi0_gpu = cp.array(xi0[:, ids])
+        xi0_gpu = cp.array(xi0[ids])
         # reconstruct
-        u_gpu = self.cg_tomo(xi0_gpu, u_gpu, titer, gpu)
+        u_gpu = self.cg_tomo(xi0_gpu, u_gpu, titer, gpu, dbg)
         u[:,ids] = u_gpu.get()
 
         BUSYGPUS[gpu] = 0
 
-        return u[:,ids]
-  
-    # Conjugate gradients tomography (by slices partitions)
-    def cg_tomo_batch(self, xi0, init, titer):
+        return u[:, ids]
+
+    def cg_tomo_batch(self, xi0, init, titer, dbg=False):
         """CG solver for rho||Ru-xi0||_2 by z-slice partitions"""
         u = init.copy()
         ids_list = [None]*int(np.ceil(self.nz/float(self.pnz)))
-        for k in range(0, len(ids_list)):
+        for k in range(len(ids_list)):
             ids_list[k] = range(k*self.pnz, min(self.nz, (k+1)*self.pnz))
-        
+
         lock = threading.Lock()
         global BUSYGPUS
         BUSYGPUS = np.zeros(self.ngpus)
         with cf.ThreadPoolExecutor(self.ngpus) as e:
             shift = 0
-            for ui in e.map(partial(self.cg_tomo_multi_gpu, xi0, u, titer, lock), ids_list):
-                u[:,np.arange(0, ui.shape[1])+shift] = ui
+            for ui in e.map(partial(self.cg_tomo_multi_gpu, xi0, u, titer, lock, dbg), ids_list):
+                u[:,np.arange(ui.shape[1])+shift] = ui
                 shift += ui.shape[1]
-        cp.cuda.Device(0).use()        
+        cp.cuda.Device(0).use()
         return u
-

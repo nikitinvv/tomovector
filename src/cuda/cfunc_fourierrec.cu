@@ -1,11 +1,8 @@
-#include <stdio.h>
-
-#include "radonusfft.cuh"
-#include "kernels.cu"
+#include "cfunc_fourierrec.cuh"
+#include "kernels_fourierrec.cu"
 #include "shift.cu"
-#include <omp.h>
 
-radonusfft::radonusfft(size_t ntheta, size_t pnz, size_t n, float center,
+cfunc_fourierrec::cfunc_fourierrec(size_t ntheta, size_t pnz, size_t n, float center,
                        size_t theta_, size_t ngpus)
     : ntheta(ntheta), pnz(pnz), n(n), center(center), ngpus(ngpus) {
   float eps = 1e-2;
@@ -21,8 +18,7 @@ radonusfft::radonusfft(size_t ntheta, size_t pnz, size_t n, float center,
   theta = new float*[ngpus];
   plan1d = new cufftHandle[ngpus];  
   plan2d = new cufftHandle[ngpus];
-  omp_set_num_threads(ngpus);
-
+  
   for (int igpu=0;igpu<ngpus;igpu++)
   {
     cudaSetDevice(igpu);
@@ -59,8 +55,6 @@ radonusfft::radonusfft(size_t ntheta, size_t pnz, size_t n, float center,
     // compute shifts with respect to the rotation center
     takeshift <<<ceil(n / 1024.0), 1024>>> (shiftfwd[igpu], -(center - n / 2.0), n);
     takeshift <<<ceil(n / 1024.0), 1024>>> (shiftadj[igpu], (center - n / 2.0), n);
-
-
   }
 
   //back tp 0
@@ -83,9 +77,9 @@ radonusfft::radonusfft(size_t ntheta, size_t pnz, size_t n, float center,
 }
 
 // destructor, memory deallocation
-radonusfft::~radonusfft() { free(); }
+cfunc_fourierrec::~cfunc_fourierrec() { free(); }
 
-void radonusfft::free() {
+void cfunc_fourierrec::free() {
   if (!is_free) {
     for(int igpu=0;igpu<ngpus;igpu++)
     {
@@ -111,7 +105,7 @@ void radonusfft::free() {
   }
 }
 
-void radonusfft::fwd(size_t g_, size_t f_, size_t igpu) {
+void cfunc_fourierrec::fwd(size_t g_, size_t f_, size_t igpu) {
 
     cudaSetDevice(igpu);
     float2* f0 = (float2 *)f_;
@@ -141,7 +135,7 @@ void radonusfft::fwd(size_t g_, size_t f_, size_t igpu) {
       cudaMemcpy(&g0[i*n*pnz], &g[igpu][i*n*pnz], n * pnz * sizeof(float2), cudaMemcpyDefault);  
 }
 
-void radonusfft::adj(size_t f_, size_t g_, size_t igpu) {
+void cfunc_fourierrec::adj(size_t f_, size_t g_, size_t igpu) {
     cudaSetDevice(igpu);
     float2* g0 = (float2 *)g_;
     for (int i=0;i<ntheta;i++)    

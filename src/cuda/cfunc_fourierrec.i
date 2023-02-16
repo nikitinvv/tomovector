@@ -1,12 +1,12 @@
 /*interface*/
-%module radonusfft
+%module cfunc_fourierrec
 
 %{
 #define SWIG_FILE_WITH_INIT
-#include "radonusfft.cuh"
+#include "cfunc_fourierrec.cuh"
 %}
 
-class radonusfft
+class cfunc_fourierrec
 {
 public:
   %immutable;
@@ -17,8 +17,8 @@ public:
   size_t ngpus;
 
   %mutable;
-  radonusfft(size_t ntheta, size_t pnz, size_t n, float center, size_t theta_, size_t ngpus);
-  ~radonusfft();
+  cfunc_fourierrec(size_t ntheta, size_t pnz, size_t n, float center, size_t theta_, size_t ngpus);
+  ~cfunc_fourierrec();
   void fwd(size_t g, size_t f, size_t igpu);
   void adj(size_t f, size_t g, size_t igpu);
   void free();

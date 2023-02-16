@@ -14,13 +14,16 @@ include_directories(${PYTHON_INCLUDE_PATH})
 # find_package(NumPy REQUIRED)
 # include_directories(${NumPy_INCLUDE_DIRS})
 
-find_package(OpenMP)
+# Must tell CMake that SWIG interface files are CXX files
+set_source_files_properties(cfunc_fourierrec.i PROPERTIES CPLUSPLUS ON)
+swig_add_library(cfunc_fourierrec LANGUAGE python SOURCES cfunc_fourierrec.i cfunc_fourierrec.cu)
+swig_link_libraries(cfunc_fourierrec cudart cufft)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cfunc_fourierrec.py" DESTINATION tomovector)
+install(TARGETS cfunc_fourierrec LIBRARY DESTINATION tomovector)
 
 # Must tell CMake that SWIG interface files are CXX files
-set_source_files_properties(radonusfft.i PROPERTIES CPLUSPLUS ON)
-swig_add_library(radonusfft LANGUAGE python SOURCES radonusfft.i radonusfft.cu)
-swig_link_libraries(radonusfft cudart cufft OpenMP::OpenMP_CXX)
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --compiler-options -fopenmp")
-
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/radonusfft.py" DESTINATION tomovector)
-install(TARGETS radonusfft LIBRARY DESTINATION tomovector)
+set_source_files_properties(cfunc_linerec.i PROPERTIES CPLUSPLUS ON)
+swig_add_library(cfunc_linerec LANGUAGE python SOURCES cfunc_linerec.i cfunc_linerec.cu)
+swig_link_libraries(cfunc_linerec cudart)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cfunc_linerec.py" DESTINATION tomovector)
+install(TARGETS cfunc_linerec LIBRARY DESTINATION tomovector)

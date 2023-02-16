@@ -102,8 +102,8 @@ void __global__ gather(float2 *g, float2 *f, float *x, float *y, int M,
   float y0 = y[tx + ty * N];
   int g_ind = (
     + tx
-    + tz * N
-    + ty * N * Nz
+    + ty * N
+    + tz * N * Ntheta
   );
   if (direction == TOMO_FWD) {
     g0.x = 0.0f;
