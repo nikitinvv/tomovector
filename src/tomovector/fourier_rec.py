@@ -14,7 +14,7 @@ class FourierRec():
 
     def free(self):
         self.cl.free()
-        
+    
     def fwd(self, u, gpu=0):
         """Radon transform (R)"""
         res = cp.zeros([self.pnz//2,  self.ntheta, 2*self.n], dtype='float32')

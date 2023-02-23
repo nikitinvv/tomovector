@@ -31,9 +31,9 @@ void cfunc_linerec::fwd(size_t g_, size_t f_, size_t igpu)
     float* g = (float *)g_;    
     float* f = (float *)f_;
     // set thread block, grid sizes will be computed before cuda kernel execution
-    dim3 dimBlock(32,32,1);    
+    dim3 dimBlock(16,16,4);    
     dim3 GS3d0;  
-    GS3d0 = dim3(ceil(n / 32.0), ceil(ntheta / 32.0), pnz);
+    GS3d0 = dim3(ceil(n / 16.0), ceil(ntheta / 16.0), ceil(pnz / 4.0));
     fwd_ker <<<GS3d0, dimBlock>>> (g, f, theta[igpu], center, 1, n, ntheta, pnz);
 }   
 

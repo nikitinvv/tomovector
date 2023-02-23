@@ -9,12 +9,16 @@ objx = dxchange.read_tiff('data/phantom_00012/M4R1_mx.tif').astype('float32')
 objy = dxchange.read_tiff('data/phantom_00012/M4R1_my.tif').astype('float32')
 objz = dxchange.read_tiff('data/phantom_00012/M4R1_mz.tif').astype('float32')
 
-npad = ((182, 182), (64, 64), (0, 0))
+npad = ((182, 182), (64+52+128, 64+52+128), (52+128, 52+128))
 objx = np.pad(objx, npad, mode='constant', constant_values=0)
 objy = np.pad(objy, npad, mode='constant', constant_values=0)
 objz = np.pad(objz, npad, mode='constant', constant_values=0)
 
-
+dxchange.write_tiff(objx,'data/ux',overwrite=True)
+dxchange.write_tiff(objy,'data/uy',overwrite=True)
+dxchange.write_tiff(objz,'data/uz',overwrite=True)
+print(objx.shape)
+exit()
 nz = objx.shape[0]
 n = objx.shape[-1]
 

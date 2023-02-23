@@ -160,7 +160,7 @@ void cfunc_fourierrec::adj(size_t f_, size_t g_, size_t igpu) {
     fftshiftc <<<GS3d2, BS3d>>> (fdee[igpu], 2 * n + 2 * m, pnz);
     
     divphi <<<GS3d0, BS3d>>> (fdee[igpu], f[igpu], mu, n, pnz, m, TOMO_ADJ);
-    //circ <<<GS3d0, BS3d>>> (f, 1.0f / n, n, pnz);
+    // circ <<<GS3d0, BS3d>>> (f, 1.0f, n, pnz);
     float2* f0 = (float2 *)f_;
     cudaMemcpy(f0, f[igpu], n * n * pnz * sizeof(float2),
               cudaMemcpyDefault);

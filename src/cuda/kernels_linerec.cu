@@ -17,8 +17,8 @@ void __global__ fwd_ker(float *data, float *f, float *theta, float center, float
     {
         x = ctheta*(tx-n/2)+stheta*(t-n/2) + center;
         y = -stheta*(tx-n/2)+ctheta*(t-n/2) + center;
-        xr = (int)x;
-        yr = (int)y;
+        xr = (int)(x-1e-5);
+        yr = (int)(y-1e-5);
         // linear interp            
         if ((xr >= 0) & (xr < n - 1) & (yr >= 0) & (yr < n-1))
         {
@@ -52,7 +52,7 @@ void __global__ adj_ker(float *f, float *data, float *theta, float center, float
         float ctheta = __cosf(theta0);
         float stheta = __sinf(theta0);
         u = ctheta*(tx-n/2)+stheta*(ty-n/2)+center;        
-        ur = (int)u;
+        ur = (int)(u-1e-5);
         
         // linear interp            
         if ((ur >= 0) & (ur < n - 1))

@@ -9,11 +9,12 @@ objx = dxchange.read_tiff('data/phantom_00012/M4R1_mx.tif').astype('float32')
 objy = dxchange.read_tiff('data/phantom_00012/M4R1_my.tif').astype('float32')
 objz = dxchange.read_tiff('data/phantom_00012/M4R1_mz.tif').astype('float32')
 
-npad = ((234, 234), (116, 116), (52, 52))
+npad = ((298+64, 298+64), (116+64+64, 116+64+64), (52+64+64, 52+64+64))
 objx = np.pad(objx, npad, mode='constant', constant_values=0)
 objy = np.pad(objy, npad, mode='constant', constant_values=0)
 objz = np.pad(objz, npad, mode='constant', constant_values=0)
-
+# print(objx.shape)
+# exit()
 theta = tomopy.angles(31, 90, 270)
 # prj1 = tomopy.project3(objx, objy, objz, theta, axis=0, pad=False)
 # dxchange.write_tiff(prj1, 'data/prj_tomopy', overwrite=True)
@@ -38,10 +39,10 @@ ngpus = 1
 theta = theta.astype('float32')
 
 # p
-p = np.zeros([3, 1, ntheta, 1], dtype='float32')
-p[0] = np.cos(theta)[np.newaxis, :, np.newaxis]
-p[1] = -np.sin(theta)[np.newaxis, :, np.newaxis]
-p[2] = 0
+p = np.zeros([3,ntheta,1],dtype='float32')
+p[0] = np.cos(theta)[np.newaxis,:,np.newaxis]
+p[1] = -np.sin(theta)[np.newaxis,:,np.newaxis]
+p[2] = 0# can be also used if needed
 
 method = 'fourierrec'
 with pt.SolverTomo(theta, p, ntheta, nz, n, pnz, center, method,  ngpus) as slv:
