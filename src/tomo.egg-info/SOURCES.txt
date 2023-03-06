@@ -1,0 +1,12 @@
+MANIFEST.in
+README.md
+setup.py
+_skbuild/linux-x86_64-3.9/cmake-install/src/tomo/__init__.py
+_skbuild/linux-x86_64-3.9/cmake-install/src/tomo/_cfunc_fourierrec.so
+_skbuild/linux-x86_64-3.9/cmake-install/src/tomo/cfunc_fourierrec.py
+_skbuild/linux-x86_64-3.9/cmake-install/src/tomo/fourier_rec.py
+src/tomo.egg-info/PKG-INFO
+src/tomo.egg-info/SOURCES.txt
+src/tomo.egg-info/dependency_links.txt
+src/tomo.egg-info/not-zip-safe
+src/tomo.egg-info/top_level.txt

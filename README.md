@@ -1,5 +1,5 @@
-# tomovector
-Vector tomography solver with the Conjugate gradient method
+# tomo
+Tomo tests
 
 ## Install dependencies
 
@@ -14,4 +14,4 @@ Check folder tests/:
 
 1) test_adj.py - the adjoint test
 
-2) test_tomo.py - reconstruction by the cg method
+2) test_tomo.py - data generation + reconstruction
